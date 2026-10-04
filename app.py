@@ -83,6 +83,7 @@ WARNING_CODES = {
 # サンプルデータの読み込み
 DATA_FILE = os.path.join(APP_DIR, 'data', 'shelters.json')
 INSTRUCTIONS_FILE = os.path.join(APP_DIR, 'data', 'instructions.json')
+NOTIFICATION_HISTORY_FILE = os.path.join(APP_DIR, 'data', 'notification_history.json')
 
 def load_json(path, default):
     """JSONファイルを読み込む（存在しない・壊れている場合は default を返す）"""
@@ -94,6 +95,44 @@ def load_json(path, default):
 
 shelters = load_json(DATA_FILE, [])
 instructions = load_json(INSTRUCTIONS_FILE, [])
+notification_history = load_json(NOTIFICATION_HISTORY_FILE, [])
+
+DEFAULT_SHELTER_COORDS = {
+    '御所見小学校': {'lat': 40.8395, 'lng': 140.7380},
+    '片瀬小学校': {'lat': 40.8160, 'lng': 140.7120},
+    '鵠洋小学校': {'lat': 40.8010, 'lng': 140.7455},
+    'あああ': {'lat': 40.8255, 'lng': 140.7585},
+    'いいい': {'lat': 40.8183, 'lng': 140.7605},
+    '青森市中心部': {'lat': 40.8242, 'lng': 140.7415},
+}
+
+
+def normalize_shelter_data(items):
+    """避難所データに位置情報を補完して返す"""
+    normalized = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+
+        shelter_name = item.get('name', '').strip()
+        coords = DEFAULT_SHELTER_COORDS.get(shelter_name)
+
+        result = dict(item)
+        result['status'] = '開設中' if result.get('status') == '開設中' else '未開設'
+        if coords:
+            result['lat'] = coords['lat']
+            result['lng'] = coords['lng']
+            result['latitude'] = coords['lat']
+            result['longitude'] = coords['lng']
+        elif 'lat' not in result and 'latitude' not in result:
+            result['lat'] = 40.8242
+            result['lng'] = 140.7415
+            result['latitude'] = 40.8242
+            result['longitude'] = 140.7415
+
+        normalized.append(result)
+
+    return normalized
 
 def save_instructions():
     """指示ボードのデータをファイルに保存する"""
@@ -102,6 +141,42 @@ def save_instructions():
             json.dump(instructions, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
+
+
+def get_resident_notices():
+    """ホーム画面に表示する有効な住民向け指示を新しい順に返す"""
+    inactive_statuses = {'解除', '完了', '取消', '終了', '停止'}
+    urgent_values = {'緊急', '高', '高い', '重要', 'emergency', 'critical', 'high'}
+    urgent_terms = ('避難指示', '緊急', '至急', '避難してください', '直ちに', '危険')
+    notices = []
+
+    for instruction in instructions:
+        if instruction.get('target') != '住民':
+            continue
+        if instruction.get('status', '').strip() in inactive_statuses:
+            continue
+
+        notice = dict(instruction)
+        priority = str(
+            instruction.get('urgency')
+            or instruction.get('priority')
+            or instruction.get('severity')
+            or ''
+        ).strip().lower()
+        content = instruction.get('content', '')
+        notice['is_urgent'] = (
+            priority in urgent_values
+            or any(term in content for term in urgent_terms)
+        )
+        notices.append(notice)
+
+    notices.sort(
+        key=lambda notice: parse_japanese_datetime(
+            notice.get('created_at') or notice.get('updated_at')
+        ),
+        reverse=True
+    )
+    return notices
 # ────────────────────────────────
 
 # ────────────────────────────────
@@ -127,6 +202,19 @@ def get_japan_time():
     return datetime.now(JST).strftime("%Y年%m月%d日 %H:%M")
 
 
+def parse_japanese_datetime(value):
+    """日本語時刻文字列を datetime に変換する"""
+    if not value:
+        return datetime.min.replace(tzinfo=JST)
+    try:
+        return datetime.strptime(value, "%Y年%m月%d日 %H:%M").replace(tzinfo=JST)
+    except ValueError:
+        try:
+            return datetime.strptime(value, "%Y年%m月%d日 %H:%M:%S").replace(tzinfo=JST)
+        except ValueError:
+            return datetime.min.replace(tzinfo=JST)
+
+
 def format_report_time(iso_str):
     """気象庁の発表時刻（ISO形式）をJSTの表示用文字列に変換する"""
     if not iso_str:
@@ -142,7 +230,8 @@ def format_report_time(iso_str):
 
 def filter_shelters(district=None):
     """district 指定があれば一致する避難所のみ、なければ全件を返す"""
-    return [s for s in shelters if not district or s.get('district') == district]
+    results = [s for s in shelters if not district or s.get('district') == district]
+    return normalize_shelter_data(results)
 
 
 def parse_area_warnings(warning_data):
@@ -241,7 +330,7 @@ def get_weather_warnings():
 # トップページ：templates/index.html を返す（住民向け指示も表示する）
 @app.route('/')
 def index():
-    resident_notices = [i for i in instructions if i.get('target') == '住民']
+    resident_notices = get_resident_notices()
     return render_template('index.html', resident_notices=resident_notices)
 
 # ログインページ
@@ -288,6 +377,9 @@ def logout():
 def shelter_register():
     if request.method == 'POST':
         shelter_name = request.form.get('name', '').strip()
+        shelter_status = request.form.get('status', '未開設')
+        if shelter_status not in ('開設中', '未開設'):
+            shelter_status = '未開設'
 
         if not shelter_name:
             return render_template(
@@ -307,7 +399,12 @@ def shelter_register():
         new_id = max((s.get('id', 0) for s in shelters), default=0) + 1
         shelters.append({
             'id': new_id,
-            'name': shelter_name
+            'name': shelter_name,
+            'lat': 40.8242,
+            'lng': 140.7415,
+            'latitude': 40.8242,
+            'longitude': 140.7415,
+            'status': shelter_status,
         })
 
         try:
@@ -335,12 +432,57 @@ def all_shelters():
     return render_template('search_results.html', results=shelters)
 
 
-# 指示ボード：住民向けの指示を一覧で確認する
+def get_disaster_events(filter_type='all'):
+    """災害情報リストを生成し、新しい順に並べる"""
+    events = []
+    for item in notification_history:
+        category = '情報'
+        if item.get('has_emergency'):
+            category = '緊急'
+        elif item.get('has_warning') or item.get('has_advisory'):
+            category = '警報'
+
+        if item.get('warning_count', 0) > 0 or item.get('warnings'):
+            category = '警報'
+
+        summary = item.get('area_name', '市内')
+        if item.get('warnings'):
+            warning_names = ', '.join(w.get('name', '') for w in item.get('warnings', []) if w.get('name'))
+            summary = warning_names or '市内の災害情報'
+        else:
+            summary = '災害情報の確認が必要です'
+
+        icon = '🚨' if category == '緊急' else '⚠️' if category == '警報' else 'ℹ️'
+        event = {
+            'id': item.get('timestamp', ''),
+            'icon': icon,
+            'category': category,
+            'summary': summary,
+            'received_at': item.get('timestamp', ''),
+            'sort_key': parse_japanese_datetime(item.get('timestamp')),
+            'area_name': item.get('area_name', '市内')
+        }
+
+        if filter_type == 'all' or filter_type == category:
+            events.append(event)
+
+    events.sort(key=lambda item: item['sort_key'], reverse=True)
+    return events
+
+
+# 指示ボード：住民向けの指示と災害情報を一覧で確認する
 @app.route('/board')
-@login_required
 def board():
     resident_instructions = [i for i in instructions if i.get('target') == '住民']
-    return render_template('board.html', instructions=resident_instructions)
+    selected_type = request.args.get('type', 'all')
+    disaster_events = get_disaster_events(selected_type)
+    return render_template(
+        'board.html',
+        instructions=resident_instructions,
+        disaster_events=disaster_events,
+        current_filter=selected_type,
+        filter_options=['all', '緊急', '警報', '情報']
+    )
 
 # 検索結果ページ：templates/search_results.html を返す
 @app.route('/search_results')

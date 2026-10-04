@@ -3,23 +3,225 @@
 {% block title %}指示・発信ボード - 防災アプリ{% endblock %}
 
 {% block content %}
-<h2>発信ボード</h2>
-<p>住民向けの発信を登録・確認できます。</p>
+<style>
+  .board-page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 8px 0 32px;
+  }
 
-<!-- 発信一覧 -->
-<h3>発信一覧</h3>
-{% if instructions %}
-<table border="1" cellpadding="5">
-  <tr>
-    <th>内容</th>
-  </tr>
-  {% for inst in instructions %}
-  <tr>
-    <td>{{ inst.content }}{% if inst.shelter %}（避難先: {{ inst.shelter }}）{% endif %}</td>
-  </tr>
-  {% endfor %}
-</table>
-{% else %}
-<p>登録されている指示はありません。</p>
-{% endif %}
+  .section {
+    background: #fff;
+    border: 1px solid #dfeaf8;
+    border-radius: 18px;
+    box-shadow: 0 10px 24px rgba(15, 78, 145, 0.06);
+    padding: 22px 24px;
+    margin-bottom: 22px;
+  }
+
+  .section h2, .section h3 {
+    margin-top: 0;
+  }
+
+  .filter-form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+
+  .filter-form select {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #d7e5f6;
+    min-width: 180px;
+    font-size: 1rem;
+  }
+
+  .filter-form button {
+    padding: 10px 16px;
+    border: 0;
+    border-radius: 10px;
+    background: #0b6ef3;
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .disaster-list {
+    display: grid;
+    gap: 14px;
+  }
+
+  .disaster-card {
+    border: 1px solid #e2edf9;
+    background: #f9fbff;
+    border-radius: 14px;
+    padding: 16px;
+    transition: 0.2s ease;
+  }
+
+  .disaster-card.emergency {
+    background: linear-gradient(180deg, #fff5f5 0%, #ffffff 100%);
+    border-color: #f2b8b8;
+    box-shadow: 0 8px 20px rgba(214, 40, 40, 0.06);
+  }
+
+  .disaster-card.warning {
+    background: linear-gradient(180deg, #fffaf0 0%, #ffffff 100%);
+    border-color: #f4d58d;
+  }
+
+  .disaster-card.info {
+    background: linear-gradient(180deg, #f2fbf7 0%, #ffffff 100%);
+    border-color: #bfe8d0;
+  }
+
+  .disaster-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+
+  .disaster-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .type-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: #edf5ff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+  }
+
+  .type-badge {
+    display: inline-block;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+  }
+
+  .type-badge.emergency {
+    background: #ffe7e7;
+    color: #d62828;
+  }
+
+  .type-badge.warning {
+    background: #fff2d6;
+    color: #9a6a00;
+  }
+
+  .type-badge.info {
+    background: #e8f7ee;
+    color: #1d7c4d;
+  }
+
+  .received-time {
+    color: #53657b;
+    font-size: 0.92rem;
+    font-weight: 600;
+  }
+
+  .summary {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #1e2a39;
+    margin: 0;
+  }
+
+  .area {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-top: 8px;
+  }
+
+  .instruction-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 12px;
+  }
+
+  .instruction-table th, .instruction-table td {
+    border: 1px solid #dfeaf8;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .instruction-table th {
+    background: #f3f8ff;
+  }
+</style>
+
+<div class="board-page">
+  <section class="section">
+    <h2>災害情報表示機能</h2>
+    <p>市内の災害情報を整理して、状況把握しやすく表示します。</p>
+
+    <form method="get" class="filter-form">
+      <label for="type">情報の種類で絞り込み</label>
+      <select id="type" name="type">
+        <option value="all" {% if current_filter == 'all' %}selected{% endif %}>全て</option>
+        <option value="緊急" {% if current_filter == '緊急' %}selected{% endif %}>緊急</option>
+        <option value="警報" {% if current_filter == '警報' %}selected{% endif %}>警報</option>
+        <option value="情報" {% if current_filter == '情報' %}selected{% endif %}>情報</option>
+      </select>
+      <button type="submit">表示</button>
+    </form>
+
+    {% if disaster_events %}
+      <div class="disaster-list">
+        {% for event in disaster_events %}
+          <div class="disaster-card
+            {% if event.category == '緊急' %}emergency{% elif event.category == '警報' %}warning{% else %}info{% endif %}">
+            <div class="disaster-header">
+              <div class="disaster-meta">
+                <span class="type-icon">{{ event.icon }}</span>
+                <span class="type-badge
+                  {% if event.category == '緊急' %}emergency{% elif event.category == '警報' %}warning{% else %}info{% endif %}">
+                  {{ event.category }}
+                </span>
+              </div>
+              <div class="received-time">受信日時: {{ event.received_at }}</div>
+            </div>
+            <p class="summary">{{ event.summary }}</p>
+            <div class="area">地域: {{ event.area_name }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p>表示できる災害情報はありません。</p>
+    {% endif %}
+  </section>
+
+  <section class="section">
+    <h3>発信一覧</h3>
+    {% if instructions %}
+    <table class="instruction-table">
+      <tr>
+        <th>内容</th>
+      </tr>
+      {% for inst in instructions %}
+      <tr>
+        <td>{{ inst.content }}{% if inst.shelter %}（避難先: {{ inst.shelter }}）{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p>登録されている指示はありません。</p>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}

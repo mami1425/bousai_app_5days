@@ -73,7 +73,18 @@
       display: flex;
       align-items: center;
       gap: 12px;
+    }
+
+    .current-page {
       margin-left: auto;
+      padding: 7px 10px;
+      border: 1px solid rgba(255,255,255,0.4);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.14);
+      color: white;
+      font-size: 0.9rem;
+      font-weight: 700;
+      white-space: nowrap;
     }
 
     .menu-toggle {
@@ -136,6 +147,13 @@
       background: #f4f9ff;
     }
 
+    .menu-panel a[aria-current="page"] {
+      background: #eaf3ff;
+      color: var(--blue-dark);
+      font-weight: 700;
+      box-shadow: inset 4px 0 0 var(--blue);
+    }
+
     .menu-panel .status {
       color: var(--muted);
       background: #f8fbff;
@@ -145,6 +163,37 @@
       max-width: 1200px;
       margin: 30px auto 60px;
       padding: 0 24px;
+    }
+
+    @media (max-width: 520px) {
+      .topbar-inner {
+        padding: 12px 14px;
+        gap: 8px;
+      }
+
+      .brand {
+        gap: 8px;
+      }
+
+      .brand-mark {
+        width: 34px;
+        height: 34px;
+      }
+
+      .current-page {
+        padding: 6px 8px;
+        font-size: 0.78rem;
+      }
+
+      .menu-toggle {
+        width: 42px;
+        height: 42px;
+      }
+
+      main {
+        margin-top: 20px;
+        padding: 0 14px;
+      }
     }
   </style>
 </head>
@@ -156,6 +205,25 @@
         <div>防災アプリ</div>
       </div>
 
+      {% if request.path == '/' %}
+        {% set current_page = 'ホーム' %}
+      {% elif request.path == '/shelter_search' %}
+        {% set current_page = '避難所検索' %}
+      {% elif request.path == '/all_shelters' %}
+        {% set current_page = '全施設一覧' %}
+      {% elif request.path == '/search_results' %}
+        {% set current_page = '検索結果' %}
+      {% elif request.path == '/shelter_register' %}
+        {% set current_page = '避難所登録' %}
+      {% elif request.path == '/board' %}
+        {% set current_page = '指示ボード' %}
+      {% elif request.path == '/login' %}
+        {% set current_page = 'ログイン' %}
+      {% else %}
+        {% set current_page = '防災アプリ' %}
+      {% endif %}
+      <div class="current-page" aria-label="現在の画面">現在: {{ current_page }}</div>
+
       <div class="menu-wrap">
         <button class="menu-toggle" type="button" aria-label="メニュー" aria-expanded="false">
           <span></span>
@@ -164,16 +232,16 @@
         </button>
 
         <nav class="menu-panel" id="menuPanel">
-          <a href="/">ホーム</a>
-          <a href="/shelter_search">避難所検索</a>
-          <a href="/shelter_register">避難所登録</a>
-          <a href="/board">指示・発信ボード</a>
+          <a href="/"{% if request.path == '/' %} aria-current="page"{% endif %}>ホーム</a>
+          <a href="/shelter_search"{% if request.path in ['/shelter_search', '/all_shelters', '/search_results'] %} aria-current="page"{% endif %}>避難所検索</a>
+          <a href="/shelter_register"{% if request.path == '/shelter_register' %} aria-current="page"{% endif %}>避難所登録</a>
+          <a href="/board"{% if request.path == '/board' %} aria-current="page"{% endif %}>指示ボード</a>
           {% if session.logged_in %}
             <div class="status">ログイン中{% if session.username %}（{{ session.username }}）{% endif %}</div>
             <a href="/logout">ログアウト</a>
           {% else %}
             <div class="status">未ログイン</div>
-            <a href="/login">ログイン</a>
+            <a href="/login"{% if request.path == '/login' %} aria-current="page"{% endif %}>ログイン</a>
           {% endif %}
         </nav>
       </div>
