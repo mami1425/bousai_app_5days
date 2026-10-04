@@ -1,42 +1,184 @@
 {% extends "base.html" %}
 
 {% block content %}
-<!-- 避難所マップ -->
-<h2>避難所マップ</h2>
-<div id="shelterMap" style="height: 300px;"></div>
+<style>
+  body {
+    background: #f6fbff;
+  }
 
-<!-- 気象警報・注意報 -->
-<h2>青森市 気象警報・注意報</h2>
-<p>10分おきに自動更新されます。</p>
-<div id="weatherContent">
-  <p>読み込み中...</p>
+  .page {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 20px 0 40px;
+  }
+
+  .panel {
+    background: #fff;
+    border: 1px solid #dfeaf8;
+    border-radius: 18px;
+    box-shadow: 0 10px 30px rgba(33, 92, 162, 0.08);
+    padding: 20px 22px;
+    margin-bottom: 18px;
+  }
+
+  .map-title {
+    margin: 0 0 14px;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1b2430;
+  }
+
+  #shelterMap {
+    height: 330px;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #dfeaf8;
+  }
+
+  .weather-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .city-name {
+    color: #0b6ef3;
+    font-size: 2rem;
+    font-weight: 700;
+  }
+
+  .weather-label {
+    color: #0b6ef3;
+    font-size: 1.4rem;
+    font-weight: 700;
+  }
+
+  .auto-update {
+    color: #1a9d47;
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 6px 0 10px;
+  }
+
+  .warning-title {
+    color: #1a9d47;
+    font-size: 1.2rem;
+    font-weight: 700;
+    margin: 8px 0 10px;
+  }
+
+  .warning-list {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 12px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .warning-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border: 1px solid #e4edf8;
+    border-radius: 12px;
+    background: #f7fbff;
+    padding: 12px 14px;
+  }
+
+  .warning-name {
+    font-weight: 700;
+    color: #1f2d3d;
+  }
+
+  .warning-tag {
+    display: inline-block;
+    border-radius: 999px;
+    padding: 6px 10px;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .warning-tag.warning {
+    background: #fff3d6;
+    color: #9d6d00;
+  }
+
+  .warning-tag.danger {
+    background: #ffe4e4;
+    color: #d22929;
+  }
+
+  .meta {
+    color: #47576b;
+    font-size: 0.96rem;
+    line-height: 1.8;
+    margin: 4px 0;
+  }
+
+  .loading {
+    color: #5e6d7f;
+    font-size: 0.96rem;
+  }
+
+  @media (max-width: 640px) {
+    .map-title {
+      font-size: 1.5rem;
+    }
+
+    .city-name {
+      font-size: 1.6rem;
+    }
+
+    .weather-label {
+      font-size: 1.1rem;
+    }
+  }
+</style>
+
+<div class="page">
+  <section class="panel">
+    <h2 class="map-title">避難所マップ</h2>
+    <div id="shelterMap"></div>
+  </section>
+
+  <section class="panel">
+    <div class="weather-header">
+      <div class="city-name">青森市</div>
+      <div class="weather-label">気象警報・注意報</div>
+    </div>
+
+    <div class="auto-update">10分おきに自動更新</div>
+
+    <div class="warning-title">現在の警報状況</div>
+    <div id="weatherContent">
+      <p class="loading">読み込み中...</p>
+    </div>
+  </section>
 </div>
 
-<!-- Leaflet の読み込み -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // 地図の初期化（藤沢市周辺を中心に設定）
     const map = L.map('shelterMap').setView([35.3390, 139.4903], 12);
 
-    // OpenStreetMapタイルを追加
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
         referrerPolicy: 'strict-origin-when-cross-origin'
     }).addTo(map);
 
-    // 気象警報・注意報の自動更新機能
     function updateWeatherWarnings() {
         fetch('/api/weather_warnings')
             .then(response => response.json())
             .then(data => {
-                console.log('気象情報を更新しました:', data);
                 updateWeatherContent(data);
             })
             .catch(error => {
                 console.error('気象情報の更新に失敗しました:', error);
+                document.getElementById('weatherContent').innerHTML = '<p class="loading">気象情報の取得に失敗しました</p>';
             });
     }
 
@@ -44,30 +186,35 @@ document.addEventListener('DOMContentLoaded', function() {
         const weatherContent = document.getElementById('weatherContent');
 
         if (data.error) {
-            weatherContent.innerHTML = '<p>気象情報の取得に失敗しました</p>';
+            weatherContent.innerHTML = '<p class="loading">気象情報の取得に失敗しました</p>';
             return;
         }
 
         let warningsHtml = '';
         if (data.warnings && data.warnings.length > 0) {
-            warningsHtml = '<ul>';
+            warningsHtml = '<ul class="warning-list">';
             data.warnings.forEach(warning => {
-                warningsHtml += `<li>${warning.name}（${warning.status}）</li>`;
+                const tagClass = warning.code === '03' || warning.code === '04' || warning.code === '08' || warning.code === '09' || warning.code === '33' || warning.code === '43' ? 'danger' : 'warning';
+                warningsHtml += `
+                    <li class="warning-item">
+                        <span class="warning-name">${warning.name}</span>
+                        <span class="warning-tag ${tagClass}">${warning.status}</span>
+                    </li>
+                `;
             });
             warningsHtml += '</ul>';
         } else {
-            warningsHtml = '<p>現在、警報・注意報は発表されていません</p>';
+            warningsHtml = '<div class="warning-item"><span class="warning-name">現在、警報・注意報は発表されていません</span></div>';
         }
 
         weatherContent.innerHTML = `
-            <p>対象地域: ${data.area_name || '青森市'}</p>
+            <p class="meta">対象地域: ${data.area_name || '青森市'}</p>
             ${warningsHtml}
-            <p>最終確認: <span id="lastFetchTime">${data.last_fetch_time || '更新中...'}</span></p>
-            <p>気象庁最終発表: ${data.report_time || '不明'}</p>
+            <p class="meta" style="color:#1a9d47; font-weight:700;">データ取得時間: ${data.last_fetch_time || '更新中...'}</p>
+            <p class="meta">気象庁発表時間: ${data.report_time || '不明'}</p>
         `;
     }
 
-    // 初回表示＋10分（600,000ミリ秒）おきに自動更新
     updateWeatherWarnings();
     setInterval(updateWeatherWarnings, 600000);
 });

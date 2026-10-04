@@ -4,31 +4,204 @@
   <meta charset="utf-8">
   <title>{% block title %}防災アプリ{% endblock %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    :root {
+      --bg: #edf6ff;
+      --panel: #ffffff;
+      --panel-soft: #f3f8ff;
+      --blue: #0b6ef3;
+      --blue-dark: #0a4fb2;
+      --text: #1c2a39;
+      --muted: #66758a;
+      --line: #dfeaf8;
+      --warning: #f8b400;
+      --danger: #e53935;
+      --success: #2e9d65;
+      --shadow: 0 12px 28px rgba(17, 72, 148, 0.12);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic", sans-serif;
+      background: linear-gradient(180deg, #edf6ff 0%, #f7fbff 100%);
+      color: var(--text);
+    }
+
+    .topbar {
+      position: relative;
+      z-index: 1000;
+      background: linear-gradient(135deg, #0d5bda 0%, #1d82f2 100%);
+      color: white;
+      box-shadow: 0 6px 18px rgba(11, 110, 243, 0.2);
+    }
+
+    .topbar-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 18px 24px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      background: rgba(255,255,255,0.2);
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .menu-wrap {
+      position: relative;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-left: auto;
+    }
+
+    .menu-toggle {
+      width: 48px;
+      height: 48px;
+      border: 0;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.12);
+      cursor: pointer;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 0;
+    }
+
+    .menu-toggle span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: white;
+      border-radius: 2px;
+    }
+
+    .menu-panel {
+      position: absolute;
+      top: 58px;
+      right: 0;
+      min-width: 220px;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 18px 36px rgba(15, 52, 105, 0.16);
+      border: 1px solid #e8eef8;
+      display: none;
+      overflow: hidden;
+      z-index: 3000;
+    }
+
+    .menu-panel.open {
+      display: block;
+    }
+
+    .menu-panel a,
+    .menu-panel .status {
+      display: block;
+      color: var(--text);
+      text-decoration: none;
+      padding: 12px 14px;
+      border-bottom: 1px solid #edf3fc;
+      font-size: 0.95rem;
+    }
+
+    .menu-panel a:last-child,
+    .menu-panel .status:last-child {
+      border-bottom: none;
+    }
+
+    .menu-panel a:hover {
+      background: #f4f9ff;
+    }
+
+    .menu-panel .status {
+      color: var(--muted);
+      background: #f8fbff;
+    }
+
+    main {
+      max-width: 1200px;
+      margin: 30px auto 60px;
+      padding: 0 24px;
+    }
+  </style>
 </head>
 <body>
-  <!-- ヘッダー -->
-  <h1>防災アプリ</h1>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark">⚑</div>
+        <div>防災アプリ</div>
+      </div>
 
-  <!-- ナビゲーション -->
-  <nav>
-    <a href="/">ホーム</a> |
-    <a href="/shelter_search">避難所検索</a> |
-    <a href="/shelter_register">避難所登録</a> |
-    <a href="/board">指示・発信ボード</a>
-    ｜
-    {% if session.logged_in %}
-      ログイン中{% if session.username %}（{{ session.username }}）{% endif %}
-      <a href="/logout">ログアウト</a>
-    {% else %}
-      未ログイン
-      <a href="/login">ログイン</a>
-    {% endif %}
-  </nav>
-  <hr>
+      <div class="menu-wrap">
+        <button class="menu-toggle" type="button" aria-label="メニュー" aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <nav class="menu-panel" id="menuPanel">
+          <a href="/">ホーム</a>
+          <a href="/shelter_search">避難所検索</a>
+          <a href="/shelter_register">避難所登録</a>
+          <a href="/board">指示・発信ボード</a>
+          {% if session.logged_in %}
+            <div class="status">ログイン中{% if session.username %}（{{ session.username }}）{% endif %}</div>
+            <a href="/logout">ログアウト</a>
+          {% else %}
+            <div class="status">未ログイン</div>
+            <a href="/login">ログイン</a>
+          {% endif %}
+        </nav>
+      </div>
+    </div>
+  </header>
 
   <main>
-    <!-- ここに子テンプレートの content が入る -->
     {% block content %}{% endblock %}
   </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const toggle = document.querySelector('.menu-toggle');
+      const panel = document.getElementById('menuPanel');
+      if (!toggle || !panel) return;
+
+      toggle.addEventListener('click', function () {
+        const isOpen = panel.classList.toggle('open');
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      });
+
+      document.addEventListener('click', function (event) {
+        if (!panel.contains(event.target) && !toggle.contains(event.target)) {
+          panel.classList.remove('open');
+          toggle.setAttribute('aria-expanded', 'false');
+        }
+      });
+    });
+  </script>
 </body>
 </html>

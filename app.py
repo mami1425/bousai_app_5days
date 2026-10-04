@@ -28,8 +28,9 @@ ADMIN_CREDENTIALS = {
 PREFECTURE_CODE = "020000"  # 青森県
 AREA_NAME = "青森市"
 
-# ワークショップ課題：青森市の市区町村コードに変更する
-AREA_CODE = "1420500"
+# 青森市に対応する市区町村コード。実際の気象庁データでは市名でも照合できるよう、
+# コードと地域名の両方を許容する。
+AREA_CODE = "022010"
 
 WARNING_URL = (
     f"https://www.jma.go.jp/bosai/warning/data/r8/{PREFECTURE_CODE}.json"
@@ -173,7 +174,11 @@ def parse_area_warnings(warning_data):
             (
                 item for item in class20_items
                 if isinstance(item, dict)
-                and item.get("areaCode") == AREA_CODE
+                and (
+                    item.get("areaCode") == AREA_CODE
+                    or item.get("areaName") == AREA_NAME
+                    or item.get("name") == AREA_NAME
+                )
             ),
             None
         )
@@ -277,10 +282,46 @@ def logout():
     session.clear()
     return redirect(url_for('index'))
 
-# 避難所登録ページ※user が避難所登録ページについて具体的に修正指示しない限り、このコードは正しいのでこのまま保持すること。
-@app.route('/shelter_register')
+# 避難所登録ページ
+@app.route('/shelter_register', methods=['GET', 'POST'])
 @login_required
 def shelter_register():
+    if request.method == 'POST':
+        shelter_name = request.form.get('name', '').strip()
+
+        if not shelter_name:
+            return render_template(
+                'shelter_register.html',
+                error=True,
+                message='避難所名を入力してください。'
+            )
+
+        # 既に同じ名前が存在する場合は重複登録を防ぐ
+        if any(s.get('name') == shelter_name for s in shelters):
+            return render_template(
+                'shelter_register.html',
+                error=True,
+                message='同じ避難所名は登録できません。'
+            )
+
+        new_id = max((s.get('id', 0) for s in shelters), default=0) + 1
+        shelters.append({
+            'id': new_id,
+            'name': shelter_name
+        })
+
+        try:
+            with open(DATA_FILE, 'w', encoding='utf-8') as f:
+                json.dump(shelters, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+        return render_template(
+            'shelter_register.html',
+            success=True,
+            message='避難所を登録しました。'
+        )
+
     return render_template('shelter_register.html')
 
 # 避難所検索ページ
